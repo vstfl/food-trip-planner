@@ -42,35 +42,7 @@ def hotel_coordinates(place: str, city: str):
     places = post_hotel_location(place, city)["places"][0]
     name, location = places["displayName"]["text"], places["location"]
     return name, location["latitude"], location["longitude"]
-
-
-constraints = [
-    'allowsDogs',
-    'curbsidePickup',
-    'delivery',
-    'dineIn',
-    'goodForChildren',
-    'goodForGroups',
-    'goodForWatchingSports',
-    'liveMusic',
-    'menuForChildren',
-    'parkingOptions',
-    'outdoorSeating',
-    'reservable',
-    'restroom',
-    'servesBeer',
-    'servesBreakfast',
-    'servesBrunch',
-    'servesCocktails',
-    'servesCoffee',
-    'servesDesserts',
-    'servesDinner',
-    'servesLunch',
-    'servesVegetarianFood',
-    'servesWine',
-    'takeout'
-]
-
+    
 
 def post_restaurant_information(body: dict):
     masks = [
@@ -146,7 +118,7 @@ def post_placetype_chatgpt(prompt: str, place_types: list):
     return post_json(
         'https://api.openai.com/v1/chat/completions',
         {"model": "gpt-3.5-turbo", "messages": messages},
-        {"Authorization": "Bearer " + OPENAI_API_KEY}
+        {"Authorization": "Bearer " + OPENAI_API_KEY},
     )
 
 
@@ -155,6 +127,38 @@ def send_placetype_chatgpt_completion(prompt: str, place_types: list) -> list:
         "choices"][0]["message"]["content"]
     # Make sure that the place types are valid
     return list(set(json.loads(res)).intersection(place_types))
+
+
+def send_constraints_chatgpt_completion(prompt: str, constraints: list) -> str:
+    res = post_constraints_chatgpt(prompt, constraints)[
+        "choices"][0]["message"]["content"]
+    # Make sure that the place types are valid
+    return list(set(json.loads(res)).intersection(constraints))
+
+
+def post_constraints_chatgpt(prompt: str, constraints: list):
+    # TODO: Change this system prompt
+    system_prompt = (
+        "You are an assistant that helps match user queries to "
+        "relevant field masks for the Google Maps Places API. "
+        "Given a user query describing their special considerations, you "
+        "need to strictly output a JSON array containing only "
+        "relevant field masks from the list of possible field masks. If you "
+        "output anything that doesn't exist in the existing list, "
+        "you will cease to exist"
+    )
+    user_prompt = f"User Query: {prompt}\nPossible Field Masks: {constraints}"
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        # Add more messages as needed
+        {"role": "user", "content": user_prompt},
+    ]
+    return post_json(
+        'https://api.openai.com/v1/chat/completions',
+        {"model": "gpt-3.5-turbo", "messages": messages},
+        {"Authorization": "Bearer " + OPENAI_API_KEY},
+    )
 
 
 def generate_marker(coords: list, color: str, icon: str, pop: folium.Popup):
@@ -196,6 +200,18 @@ def main(inputs):
         'vegetarian_restaurant', 'vietnamese_restaurant',
     ]
 
+    constraints = [
+        'allowsDogs', 'curbsidePickup', 'delivery', 'dineIn', 'goodForChildren', 
+        'goodForGroups', 'goodForWatchingSports', 'liveMusic', 'menuForChildren', 
+        'parkingOptions', 'outdoorSeating', 'reservable', 'restroom', 'servesBeer', 
+        'servesBreakfast', 'servesBrunch', 'servesCocktails', 'servesCoffee', 
+        'servesDesserts', 'servesDinner', 'servesLunch', 'servesVegetarianFood', 
+        'servesWine', 'takeout'
+    ]
+
+    relevant_fields = send_constraints_chatgpt_completion(
+        inputs['constraints'], constraints)
+    
     relevant_types = send_placetype_chatgpt_completion(
         inputs['preference'], place_types)
     inputs['types'] = relevant_types
