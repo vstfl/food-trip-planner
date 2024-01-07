@@ -1,6 +1,5 @@
 import base64
 from operator import itemgetter
-import sys
 import urllib.request
 import json
 import folium
@@ -64,44 +63,42 @@ def post_restaurant_information(body: dict, constraints: list):
     ] + constraints
     field_mask = ",".join('places.' + i for i in masks)
     return post_json(
-        'https://places.googleapis.com/v1/places:searchNearby', body,
+        'https://places.googleapis.com/v1/places:searchText', body,
         headers={'X-Goog-FieldMask': field_mask,
                  'X-Goog-Api-Key': GOOGLE_API_KEY},
     )
 
 
-def restaurant_information(inputs: dict, location: list, constraints: list):
-    types, days, radius, rankpref = itemgetter(
-        'types', 'days', 'radius', 'rankpref')(inputs)
+def get_price_levels(spend: int):
+    return [
+        "PRICE_LEVEL_UNSPECIFIED",
+        "PRICE_LEVEL_INEXPENSIVE",
+        "PRICE_LEVEL_MODERATE",
+        "PRICE_LEVEL_EXPENSIVE",
+        "PRICE_LEVEL_VERY_EXPENSIVE",
+    ][:spend]
+
+
+def restaurant_information(text_query: str, inputs: dict, location: list, constraints: list):
+    radius, rankpref = itemgetter('radius', 'rankpref')(inputs)
     lat, lon = location
     body = {
-        "includedTypes": types,
-        "excludedTypes": ['bar'],
+        "textQuery": text_query,
+        "minRating": 4.0,
+        "priceLevels": get_price_levels(inputs['spend']),
         "rankPreference": rankpref,
-        "maxResultCount": RESULT_FACTOR*days,  # results depend on duration of stay
-        "locationRestriction": {
+        "maxResultCount": RESULT_FACTOR,  # results depend on duration of stay
+        "locationBias": {
             "circle": {
                 "center": {"latitude": lat, "longitude": lon},
-                "radius": radius
-            }
-        }
+                "radius": radius,
+            },
+        },
     }
     return post_restaurant_information(body, constraints)["places"]
 
 
-def is_restaurant_valid(place: dict, spend: int, constraints: dict) -> bool:
-    price_levels = {
-        "PRICE_LEVEL_UNSPECIFIED": -1,
-        "PRICE_LEVEL_FREE": 0,
-        "PRICE_LEVEL_INEXPENSIVE": 1,
-        "PRICE_LEVEL_MODERATE": 2,
-        "PRICE_LEVEL_EXPENSIVE": 3,
-        "PRICE_LEVEL_VERY_EXPENSIVE": 4,
-        None: 6,  # Exclude places with no price level
-    }
-    if (price_levels[place.get('priceLevel')] > spend) or place.get('rating', 0) < 4.0:
-        return False
-
+def is_restaurant_valid(place: dict, constraints: dict) -> bool:
     for k, v in constraints.items():
         prop = place.get(k)
         # Ignore if value is not there
@@ -113,26 +110,24 @@ def is_restaurant_valid(place: dict, spend: int, constraints: dict) -> bool:
     return True
 
 
-def filter_restaurants(res: list, spend: int, constraints: dict):
+def filter_restaurants(res: list, constraints: dict):
     valid_places = []
     for place in res:
-        if is_restaurant_valid(place, spend, constraints):
+        if is_restaurant_valid(place, constraints):
             valid_places.append(place)
 
     return valid_places
 
 
-def post_placetype_chatgpt(prompt: str, place_types: list):
+def post_text_query_chatgpt(prompt: str):
     system_prompt = (
         "You are an assistant that helps match user queries to "
-        "relevant place types for the Google Maps Places API. "
+        "relevant food places for the Google Maps Places API. "
         "Given a user query describing their food preferences, you "
-        "need to strictly output a JSON array containing only "
-        "relevant place types from the possible place types. If you "
-        "output anything that doesn't exist in the possible place "
-        "types, you will cease to exist"
+        "need to output a JSON array of strings that would return relevant "
+        "results when used with the Google Maps Places API."
     )
-    user_prompt = f"User Query: {prompt}\nPossible Place Types: {place_types}"
+    user_prompt = f"User Query: {prompt}"
 
     messages = [
         {"role": "system", "content": system_prompt},
@@ -145,22 +140,14 @@ def post_placetype_chatgpt(prompt: str, place_types: list):
     )
 
 
-def send_placetype_chatgpt_completion(prompt: str, place_types: list) -> list:
-    res = post_placetype_chatgpt(prompt, place_types)[
+def send_text_query_chatgpt_completion(prompt: str) -> list:
+    res = post_text_query_chatgpt(prompt)[
         "choices"][0]["message"]["content"]
     print(res)
     obj = json.loads(res.replace("'", '"'))
     if not isinstance(obj, list):
         obj = [*obj.values()][0]
-    valid_places = set(place_types)
-    ps = []
-    # Make sure that the place types are valid
-    for p in obj:
-        if p not in valid_places:
-            print("Invalid place type: ", p, file=sys.stderr)
-        else:
-            ps.append(p)
-    return ps
+    return obj
 
 
 def send_constraints_chatgpt_completion(prompt: str, constraints: list) -> dict:
@@ -217,24 +204,6 @@ def generate_popup(name: str, coords: list):
 
 
 def main(inputs):
-    debug = ''
-
-    place_types = [
-        'american_restaurant', 'bakery', 'bar', 'barbecue_restaurant',
-        'brazilian_restaurant', 'breakfast_restaurant', 'brunch_restaurant',
-        'cafe', 'chinese_restaurant', 'coffee_shop', 'fast_food_restaurant',
-        'french_restaurant', 'greek_restaurant', 'hamburger_restaurant',
-        'ice_cream_shop', 'indian_restaurant', 'indonesian_restaurant',
-        'italian_restaurant', 'japanese_restaurant', 'korean_restaurant',
-        'lebanese_restaurant', 'meal_delivery', 'meal_takeaway',
-        'mediterranean_restaurant', 'mexican_restaurant',
-        'middle_eastern_restaurant', 'pizza_restaurant', 'ramen_restaurant',
-        'restaurant', 'sandwich_shop', 'seafood_restaurant',
-        'spanish_restaurant', 'steak_house', 'sushi_restaurant',
-        'thai_restaurant', 'turkish_restaurant', 'vegan_restaurant',
-        'vegetarian_restaurant', 'vietnamese_restaurant',
-    ]
-
     constraints = [
         'allowsDogs', 'curbsidePickup', 'delivery', 'dineIn', 'goodForChildren',
         'goodForGroups', 'goodForWatchingSports', 'liveMusic', 'menuForChildren',
@@ -247,12 +216,11 @@ def main(inputs):
     relevant_fields = send_constraints_chatgpt_completion(
         inputs['constraints'], constraints)
 
-    inputs['types'] = send_placetype_chatgpt_completion(
-        inputs['preference'], place_types)
+    query_list = send_text_query_chatgpt_completion(inputs['preference'])
 
     # Adjust inputs for NearBy search API
     inputs['radius'] = inputs['walking']*400
-    inputs['rankpref'] = "DISTANCE" if inputs['rankpref'] == "Closest" else "POPULARITY"
+    inputs['rankpref'] = "DISTANCE" if inputs['rankpref'] == "Closest" else "RELEVANCE"
 
     # Home input
     home_name, lat, lon = hotel_coordinates(inputs['hotel'], inputs['city'])
@@ -270,14 +238,23 @@ def main(inputs):
     # Export folium map as HTML string
     map_html = m._repr_html_()
 
-    res = restaurant_information(inputs, location, [])
-    filtered_places = filter_restaurants(res, inputs['spend'], relevant_fields)
+    results = {}
+    for q in query_list:
+        res = restaurant_information(q, inputs, location, constraints)
+        results[q] = filter_restaurants(res, relevant_fields)
 
-    debug = json.dumps(filtered_places)
+    for v in results.values():
+        for place in v:
+            place['photos'] = place['photos'][0:]
+
+            name, lat, lon = itemgetter(
+                'displayName', 'latitude', 'longitude')(place)
+            location = [float(lat), float(lon)]
+            popup = generate_popup(name, location)
+            generate_marker(location, 'red', 'cutlery', popup).add_to(m)
 
     return {
         "home_name": home_name,
         "map": map_html,
-        "debug": debug,
-        "place_types": inputs['types'],
+        "results": json.dumps(results),
     }
