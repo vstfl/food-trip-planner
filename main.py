@@ -201,10 +201,11 @@ def group_by_meals(res: list, meals: list, days: int):
                 meal_dict[meal].append(place)
     for k, v in meal_dict.items():
         diff = days - len(v)
-        if diff > 0:
-            meal_dict[k] += random.choices(v, k=diff)
-        elif diff < 0:
-            meal_dict[k] = v[:days]
+        if len(v):
+            if diff > 0:
+                meal_dict[k] += random.choices(v, k=diff)
+            elif diff < 0:
+                meal_dict[k] = v[:days]
 
     return meal_dict
 
