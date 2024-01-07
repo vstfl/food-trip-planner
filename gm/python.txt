@@ -1,0 +1,1 @@
+{'places': [{'location': {'latitude': 49.279856099999996, 'longitude': -123.12758389999999}, 'displayName': {'text': 'The Burrard', 'languageCode': 'en'}}]}

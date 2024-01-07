@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-8e7EZDYVWrJ6wqX1InASs5MsDPA1u",
+  "object": "chat.completion",
+  "created": 1704571619,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Sure! Here's a Google Maps search query for you:\n\n\"Cafes near Calgary city center serving croissants and bagels within 10 minutes\"\n\nAlternatively, you can simply use this search query in Google Maps: \"Cafes near Calgary city center\" and then refine your search within the map results by looking for places specifically serving croissants and bagels."
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 68,
+    "completion_tokens": 75,
+    "total_tokens": 143
+  },
+  "system_fingerprint": null
+}

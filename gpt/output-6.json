@@ -1,0 +1,23 @@
+{
+  "id": "chatcmpl-8e7emBYXTaQ6h11DU4yBoXIkK9RhI",
+  "object": "chat.completion",
+  "created": 1704573244,
+  "model": "gpt-3.5-turbo-0613",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "search=bakery+near+me"
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 105,
+    "completion_tokens": 8,
+    "total_tokens": 113
+  },
+  "system_fingerprint": null
+}
