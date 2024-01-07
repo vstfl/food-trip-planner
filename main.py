@@ -1,4 +1,5 @@
 import base64
+import random
 from operator import itemgetter
 import urllib.request
 import json
@@ -189,6 +190,25 @@ def generate_marker(coords: list, color: str, icon: str, pop: folium.Popup):
     return folium.Marker(coords, pop, icon=folium.Icon(color=color, icon=icon))
 
 
+def group_by_meals(res: list, meals: list, days: int):
+    # Group restaurants by meals
+    meal_dict = {}
+
+    for meal in meals:
+        meal_dict[meal] = []
+        for place in res:
+            if place.get(f'serves{meal}'):
+                meal_dict[meal].append(place)
+    for k, v in meal_dict.items():
+        diff = days - len(v)
+        if diff > 0:
+            meal_dict[k] += random.choices(v, k=diff)
+        elif diff < 0:
+            meal_dict[k] = v[:days]
+
+    return meal_dict
+
+
 def generate_popup(name: str, coords: list):
     html = f'''
     <p style="text-align:center">{name}</p>
@@ -215,6 +235,7 @@ def main(inputs):
 
     relevant_fields = send_constraints_chatgpt_completion(
         inputs['constraints'], constraints)
+    print(relevant_fields)
 
     query_list = send_text_query_chatgpt_completion(inputs['preference'])
 
@@ -238,23 +259,26 @@ def main(inputs):
     # Export folium map as HTML string
     map_html = m._repr_html_()
 
-    results = {}
+    all_places = []
     for q in query_list:
         res = restaurant_information(q, inputs, location, constraints)
-        results[q] = filter_restaurants(res, relevant_fields)
+        all_places += filter_restaurants(res, relevant_fields)
 
-    for v in results.values():
-        for place in v:
-            place['photos'] = place['photos'][0:]
+    for place in all_places:
+        place['photos'] = place['photos'][0:]
 
-            name, lat, lon = itemgetter(
-                'displayName', 'latitude', 'longitude')(place)
-            location = [float(lat), float(lon)]
-            popup = generate_popup(name, location)
-            generate_marker(location, 'red', 'cutlery', popup).add_to(m)
+    days = inputs['days']
+    by_meals = group_by_meals(all_places, inputs['meals'], days)
+
+    by_day_by_meal = {}
+    for day in range(days):
+        by_day_by_meal[day+1] = {}
+        for meal in inputs['meals']:
+            place = by_meals[meal][day]
+            by_day_by_meal[day+1][meal] = place
 
     return {
         "home_name": home_name,
         "map": map_html,
-        "results": json.dumps(results),
+        "results": json.dumps(by_day_by_meal),
     }
