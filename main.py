@@ -1,10 +1,12 @@
 import base64
-import random
-from operator import itemgetter
-import urllib.request
 import json
-import folium
+import random
+import sys
+import urllib.request
+from operator import itemgetter
+
 import branca
+import folium
 
 GOOGLE_API_KEY = ''
 OPENAI_API_KEY = ""
@@ -29,7 +31,7 @@ def post_json(url: str, body: object, headers: dict = {}):
         res = urllib.request.urlopen(req, jsondataasbytes)
         return json.loads(res.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
-        print(json.loads(e.read().decode('utf-8')))
+        print(json.loads(e.read().decode('utf-8')), file=sys.stderr)
         raise e
 
 
@@ -144,7 +146,7 @@ def post_text_query_chatgpt(prompt: str):
 def send_text_query_chatgpt_completion(prompt: str) -> list:
     res = post_text_query_chatgpt(prompt)[
         "choices"][0]["message"]["content"]
-    print(res)
+    print(res, file=sys.stderr)
     obj = json.loads(res.replace("'", '"'))
     if not isinstance(obj, list):
         obj = [*obj.values()][0]
@@ -236,7 +238,7 @@ def main(inputs):
 
     relevant_fields = send_constraints_chatgpt_completion(
         inputs['constraints'], constraints)
-    print(relevant_fields)
+    print(relevant_fields, file=sys.stderr)
 
     query_list = send_text_query_chatgpt_completion(inputs['preference'])
 
@@ -282,5 +284,20 @@ def main(inputs):
     return {
         "home_name": home_name,
         "map": map_html,
-        "results": json.dumps(by_day_by_meal),
+        "results": by_day_by_meal,
     }
+
+
+print(
+    json.dumps(main({
+        "city": "Edmonton",
+        "hotel": "Fantasyland",
+        "constraints": "I want to bring my dog",
+        "preference": "I want chicken",
+        "rankpref": "Closest",
+        "meals": ["Breakfast", "Lunch"],
+        "days": 3,
+        "walking": 10,
+        "spend": 4,
+    }))
+)
