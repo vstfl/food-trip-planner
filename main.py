@@ -9,7 +9,7 @@ import branca
 GOOGLE_API_KEY = ''
 OPENAI_API_KEY = ""
 
-RESULT_FACTOR = 30
+RESULT_FACTOR = 20
 
 
 def get_photo_src(photo_name: str):
