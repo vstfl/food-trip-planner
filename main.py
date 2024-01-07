@@ -265,7 +265,8 @@ def main(inputs):
         all_places += filter_restaurants(res, relevant_fields)
 
     for place in all_places:
-        place['photos'] = place['photos'][0:]
+        if place.get('photos'):
+            place['photos'] = place['photos'][0:]
 
     days = inputs['days']
     by_meals = group_by_meals(all_places, inputs['meals'], days)
